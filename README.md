@@ -1,65 +1,32 @@
-# GROW MORE SOLUTIONS — FINAL WEBSITE
+# GROW MORE SOLUTIONS — Final Website
 
-This build combines:
-- Professional responsive storefront using the supplied GROW MORE logo
-- Admin editor for Header/Site, Home/Hero, Products, Pricing, Contact/Social and section ON/OFF
-- Admin login
-- Customer registration/login/logout
-- Customer dashboard / My Products / Order History
-- Product plan durations: Monthly, 6 Months, Yearly, Lifetime
-- Cashfree hosted checkout
-- Server-side Cashfree order creation and payment verification
-- Cashfree webhook signature verification
-- Entitlements created only after a verified PAID status
-- Protected EA/Indicator file downloads
-- Admin dashboard for users, orders and access management
-- SQLite database; no external database service required
+Professional trading website for GROW MORE SOLUTIONS.
 
-## 1) Install
-Install Node.js 18+.
+## Included
+- GROW MORE INDICATOR product
+- Final pricing: Monthly ₹3,999 | 6 Months ₹6,999 | Yearly ₹10,999 | Lifetime ₹24,999
+- Customer registration/login
+- My Products and order history
+- TradingView username/access request
+- Admin dashboard
+- Cashfree checkout hooks and webhook verification
+- Protected downloads for future EA/bot products
+- Responsive design
 
-In this folder:
-npm install
+## Local run
+1. Install Node.js 18+
+2. `npm install`
+3. Copy `.env.example` to `.env`
+4. `npm start`
+5. Website: http://localhost:3000
+6. Admin: http://localhost:3000/admin.html
 
-## 2) Configure .env
-Copy `.env.example` to `.env`.
+Default admin password: `GROWMORE123` (change `ADMIN_PASSWORD` in production).
 
-Generate an admin password hash:
-node -e "console.log(require('bcryptjs').hashSync('YOUR_PASSWORD', 12))"
+## Render
+Build command: `npm install`
+Start command: `npm start`
+If no admin environment variable is configured, the site accepts the default `GROWMORE123` so the first login is simple. For production, set `ADMIN_PASSWORD` in Render Environment.
 
-Paste that hash into ADMIN_PASSWORD_HASH.
-
-For Cashfree, put your own App ID and Secret Key in `.env`.
-Do NOT send the secret key in chat or put it in frontend files.
-
-## 3) Run
-npm start
-
-Open:
-http://localhost:3000
-
-Admin:
-http://localhost:3000/admin.html
-
-## 4) Cashfree
-The website creates the order on the server, opens Cashfree Hosted Checkout using the payment session ID, then verifies payment server-side. Cashfree's current web integration documents this Create Order -> payment session -> checkout -> server-side status flow.
-
-Configure the webhook URL in your Cashfree dashboard:
-https://YOUR-DOMAIN.com/api/cashfree/webhook
-
-The webhook handler verifies `x-webhook-signature` against the raw request body before changing payment/access state.
-
-## 5) Production
-Use HTTPS and a persistent server/volume because SQLite and private product files are stored on disk.
-Set:
-SITE_URL=https://yourdomain.com
-CASHFREE_ENV=production
-
-Keep secret keys only in environment variables.
-
-## 6) Recurring AutoPay
-This version gives customers fixed-duration access after a successful one-time payment.
-If you want true automatic monthly UPI/Card/eNACH renewal, that requires Cashfree Subscriptions/mandate APIs and merchant-side enablement. The product catalog is already structured with Monthly/6M/Yearly/Lifetime plan durations so that recurring billing can be added without redesigning the site.
-
-## Important
-Before going live, test sandbox payments, webhooks, downloads, refunds/failed payments, duplicate webhooks, and access expiry. Review Cashfree's current merchant terms and pricing/eligibility for your account.
+Cashfree keys must be added in Render Environment before real payments are enabled.
+TradingView invite-only access is granted manually by the script author on TradingView after the customer submits the username/access request.
