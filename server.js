@@ -84,6 +84,17 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 );
 `);
 
+// Backward-compatible database migration for older Render SQLite databases.
+function productColumns() {
+  return new Set(db.prepare("PRAGMA table_info(products)").all().map(c => c.name));
+}
+let pc = productColumns();
+if (!pc.has("image")) db.exec("ALTER TABLE products ADD COLUMN image TEXT DEFAULT ''");
+if (!pc.has("file_name")) db.exec("ALTER TABLE products ADD COLUMN file_name TEXT DEFAULT ''");
+if (!pc.has("active")) db.exec("ALTER TABLE products ADD COLUMN active INTEGER NOT NULL DEFAULT 1");
+pc = productColumns();
+if (pc.has("image_url")) db.exec("UPDATE products SET image = COALESCE(NULLIF(image,''), image_url)");
+
 const defaultSettings = {
   brand_name: "GROW MORE SOLUTIONS",
   browser_title: "GROW MORE SOLUTIONS",
@@ -134,12 +145,21 @@ for (const [k,v] of Object.entries(defaultSettings)) setStmt.run(k,v);
 
 const seedCount = db.prepare("SELECT COUNT(*) c FROM products").get().c;
 if (!seedCount) {
-  db.prepare(`INSERT INTO products(name,type,description,price,monthly,six_months,yearly,lifetime,active,image_url)
+  db.prepare(`INSERT INTO products(name,type,description,price,monthly,six_months,yearly,lifetime,active,image)
     VALUES(?,?,?,?,?,?,?,?,1,?)`).run(
       "GROW MORE INDICATOR", "TradingView Indicator",
       "Professional invite-only TradingView indicator from GROW MORE SOLUTIONS. Access is activated after verified payment and admin approval.",
       1999, 3999, 6999, 10999, 24999, "/grow-more-indicator.png"
   );
+} else {
+  const demo = db.prepare("SELECT id FROM products WHERE name='GROW MORE Smart Signals' LIMIT 1").get();
+  if (demo) {
+    db.prepare(`UPDATE products SET name=?,type=?,description=?,price=?,monthly=?,six_months=?,yearly=?,lifetime=?,active=1,image=? WHERE id=?`).run(
+      "GROW MORE INDICATOR", "TradingView Indicator",
+      "Professional invite-only TradingView indicator from GROW MORE SOLUTIONS. Access is activated after verified payment and admin approval.",
+      1999, 3999, 6999, 10999, 24999, "/grow-more-indicator.png", demo.id
+    );
+  }
 }
 
 function settings() {
@@ -379,8 +399,9 @@ app.get("/api/download/:entitlementId", requireUser, (req,res)=>{
 app.post("/api/admin/login",(req,res)=>{
   const {password}=req.body||{};
   const plain=process.env.ADMIN_PASSWORD || "GROWMORE123";
-  const hash=process.env.ADMIN_PASSWORD_HASH || "";
-  const ok = hash ? bcrypt.compareSync(password||"",hash) : String(password||"")===String(plain);
+  const hash=String(process.env.ADMIN_PASSWORD_HASH || "").trim();
+  const validBcrypt=/^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/.test(hash);
+  const ok = validBcrypt ? bcrypt.compareSync(password||"",hash) : String(password||"")===String(plain);
   if(!ok) return res.status(401).json({error:"Invalid admin password"});
   const token=createSession(0,"admin");
   res.setHeader("Set-Cookie",`gm_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Number(process.env.SESSION_DAYS||7)*86400}`);
