@@ -57,7 +57,7 @@ async function load(){
  const [a,b]=await Promise.all([fetch('/api/site').then(r=>r.json()),fetch('/api/products').then(r=>r.json())]);SITE=a.settings;PRODUCTS=b;render();
 }
 function render(){
- document.title=SITE.browser_title||'GROW MORE SOLUTIONS';$('brand').textContent=SITE.brand_name||'';$('navLogo').src=SITE.logo_url||'/logo.jpeg';$('heroLogo').src=SITE.hero_image_url||'/hero.jpeg';
+ document.title=SITE.browser_title||'GROW MORE SOLUTIONS';$('brand').textContent=SITE.brand_name||'';$('navLogo').src=SITE.logo_url||'/logo.jpeg';$('heroLogo').src='/hero.jpeg';
  $('kicker').textContent=SITE.hero_kicker||'';$('heroTitle').textContent=SITE.hero_title||'';$('heroDesc').textContent=SITE.hero_description||'';$('b1').textContent=SITE.hero_btn1_text||'';$('b1').href=SITE.hero_btn1_link||'#products';$('b2').textContent=SITE.hero_btn2_text||'';$('b2').href=SITE.hero_btn2_link||'/login.html';
  [['mHome','header_menu_home'],['mProducts','header_menu_products'],['mPricing','header_menu_pricing'],['mAbout','header_menu_about'],['mContact','header_menu_contact']].forEach(([i,k])=>$(i).textContent=SITE[k]||'');
  $('featureTitle').textContent=SITE.feature_title||'';$('featureIntro').textContent=SITE.feature_intro||'';
