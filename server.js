@@ -72,6 +72,21 @@ CREATE TABLE IF NOT EXISTS entitlements (
   FOREIGN KEY(product_id) REFERENCES products(id),
   FOREIGN KEY(order_id) REFERENCES orders(id)
 );
+CREATE TABLE IF NOT EXISTS access_requests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  product_id INTEGER NOT NULL,
+  entitlement_id INTEGER NOT NULL,
+  tradingview_username TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  admin_note TEXT DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(entitlement_id),
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(product_id) REFERENCES products(id),
+  FOREIGN KEY(entitlement_id) REFERENCES entitlements(id)
+);
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL,
@@ -359,7 +374,7 @@ app.post("/api/cashfree/create-order", requireUser, async (req,res)=>{
     res.json({orderId,paymentSessionId:order.payment_session_id,environment:(process.env.CASHFREE_ENV||"sandbox")});
   } catch(e) {
     console.error(e);
-    res.status(500).json({error:"Could not create Cashfree order",details:e.data||e.message});
+    res.status(500).json({error:"Could not create Cashfree order. Payment gateway is not configured or available yet."});
   }
 });
 
@@ -386,6 +401,22 @@ app.get("/api/me/products", requireUser, (req,res)=>{
 app.get("/api/me/orders", requireUser, (req,res)=>{
   res.json(db.prepare(`SELECT o.*,p.name FROM orders o JOIN products p ON p.id=o.product_id WHERE o.user_id=? ORDER BY o.id DESC`).all(req.auth.user.id));
 });
+app.post("/api/access-requests", requireUser, (req,res)=>{
+  const entitlementId=Number(req.body?.entitlementId);
+  const username=String(req.body?.tradingviewUsername||"").trim();
+  if(!entitlementId || username.length<2 || username.length>80) return res.status(400).json({error:"Enter your exact TradingView username."});
+  const e=db.prepare(`SELECT e.*,p.name product_name FROM entitlements e JOIN products p ON p.id=e.product_id WHERE e.id=? AND e.user_id=? AND e.active=1`).get(entitlementId,req.auth.user.id);
+  if(!e) return res.status(404).json({error:"Paid product access not found."});
+  const existing=db.prepare("SELECT * FROM access_requests WHERE entitlement_id=?").get(entitlementId);
+  if(existing){ db.prepare("UPDATE access_requests SET tradingview_username=?,status='PENDING',updated_at=CURRENT_TIMESTAMP WHERE id=?").run(username,existing.id); return res.json({ok:true,id:existing.id,status:"PENDING"}); }
+  const info=db.prepare(`INSERT INTO access_requests(user_id,product_id,entitlement_id,tradingview_username,status) VALUES(?,?,?,?, 'PENDING')`).run(req.auth.user.id,e.product_id,e.id,username);
+  res.json({ok:true,id:info.lastInsertRowid,status:"PENDING"});
+});
+app.get("/api/me/access-requests", requireUser, (req,res)=>{
+  const rows=db.prepare(`SELECT ar.*,p.name product_name,e.plan,e.expires_at FROM access_requests ar JOIN products p ON p.id=ar.product_id JOIN entitlements e ON e.id=ar.entitlement_id WHERE ar.user_id=? ORDER BY ar.id DESC`).all(req.auth.user.id);
+  res.json(rows);
+});
+
 app.get("/api/download/:entitlementId", requireUser, (req,res)=>{
   const e=db.prepare(`SELECT e.*,p.file_name FROM entitlements e JOIN products p ON p.id=e.product_id WHERE e.id=? AND e.user_id=?`).get(Number(req.params.entitlementId),req.auth.user.id);
   if(!e || !e.active || (e.expires_at && new Date(e.expires_at).getTime()<=Date.now())) return res.status(403).send("Access expired or unavailable.");
@@ -479,6 +510,16 @@ app.post("/api/admin/entitlements/:id/extend",requireAdmin,(req,res)=>{
   db.prepare("UPDATE entitlements SET expires_at=?,active=1 WHERE id=?").run(end.toISOString(),e.id);
   res.json({ok:true});
 });
+app.get("/api/admin/access-requests",requireAdmin,(_req,res)=>{
+  res.json(db.prepare(`SELECT ar.*,u.name user_name,u.email,u.phone,p.name product_name,e.plan,e.expires_at FROM access_requests ar JOIN users u ON u.id=ar.user_id JOIN products p ON p.id=ar.product_id JOIN entitlements e ON e.id=ar.entitlement_id ORDER BY CASE ar.status WHEN 'PENDING' THEN 0 ELSE 1 END, ar.id DESC LIMIT 500`).all());
+});
+app.put("/api/admin/access-requests/:id",requireAdmin,(req,res)=>{
+  const id=Number(req.params.id); const status=String(req.body?.status||"PENDING").toUpperCase(); const note=String(req.body?.adminNote||"").trim().slice(0,500);
+  if(!["PENDING","GRANTED","REJECTED"].includes(status)) return res.status(400).json({error:"Invalid status"});
+  const row=db.prepare("SELECT * FROM access_requests WHERE id=?").get(id); if(!row) return res.status(404).json({error:"Access request not found"});
+  db.prepare("UPDATE access_requests SET status=?,admin_note=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").run(status,note,id); res.json({ok:true});
+});
+
 app.get("/api/admin/entitlements",requireAdmin,(_req,res)=>{
   res.json(db.prepare(`SELECT e.*,u.name user_name,u.email,p.name product_name,o.order_id
     FROM entitlements e JOIN users u ON u.id=e.user_id JOIN products p ON p.id=e.product_id JOIN orders o ON o.id=e.order_id
