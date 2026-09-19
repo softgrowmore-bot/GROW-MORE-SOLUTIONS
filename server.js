@@ -308,6 +308,7 @@ const fileStorage=multer.diskStorage({
 const uploadImage=multer({storage:imageStorage,limits:{fileSize:5*1024*1024},fileFilter:(_r,f,cb)=>cb(null,/^image\/(jpeg|png|webp|gif)$/.test(f.mimetype))});
 const uploadProduct=multer({storage:fileStorage,limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||100)*1024*1024}});
 
+app.use((req,res,next)=>{ if(req.path.startsWith("/api/")){res.setHeader("Cache-Control","no-store");} next(); });
 app.get("/api/site", (_req,res)=>res.json({settings:settings()}));
 app.get("/api/products", (_req,res)=>{
   res.json(db.prepare("SELECT id,name,type,description,price,monthly,six_months,yearly,lifetime,image,active FROM products WHERE active=1 ORDER BY id DESC").all());
